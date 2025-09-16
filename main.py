@@ -1,58 +1,49 @@
 import requests
+from bs4 import BeautifulSoup
 from ics import Calendar, Event
 from flask import Flask, Response
-import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# Your school + class info
-BASE_URL = "https://thalia.webuntis.com/WebUntis/api/public/timetable/weekly/data"
-SCHOOL = "HFGS"
-CLASS_ID = 1525  # <- your entityId
-ELEMENT_TYPE = 1  # 1 = class
+# Your public WebUntis timetable URL
+WEBUNTIS_URL = "https://thalia.webuntis.com/WebUntis?school=HFGS#/basic/timetablePublic/class?date=2025-09-15&entityId=1525"
+
+from datetime import date, timedelta
 
 def fetch_timetable():
-    today = datetime.date.today()
-    monday = today - datetime.timedelta(days=today.weekday())  # start of week
-
-    params = {
-        "elementType": ELEMENT_TYPE,
-        "elementId": CLASS_ID,
-        "date": monday.isoformat(),
-        "formatId": 2,
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "School": SCHOOL,   # <- add school name here
-    }
-
-    r = requests.get(BASE_URL, params=params, headers=headers)
-    r.raise_for_status()  # throws error if status != 200
-    data = r.json()
-
     c = Calendar()
-
-    for lesson in data.get("result", {}).get("data", {}).get("elementPeriods", []):
-        start_str = lesson["startDateTime"]
-        end_str = lesson["endDateTime"]
-
-        # Convert to datetime
-        start = datetime.datetime.fromisoformat(start_str)
-        end = datetime.datetime.fromisoformat(end_str)
-
-        # Lesson name
-        subject = lesson.get("subject", [{}])[0].get("longName", "Lesson")
-        room = lesson.get("room", [{}])[0].get("name", "")
-
-        e = Event()
-        e.name = subject
-        e.location = room
-        e.begin = start
-        e.end = end
-        c.events.add(e)
+    
+    # Scrape next 30 days
+    for day_offset in range(0, 30):
+        day = date.today() + timedelta(days=day_offset)
+        date_str = day.isoformat()
+        url = f"https://thalia.webuntis.com/WebUntis?school=HFGS#/basic/timetablePublic/class?date={date_str}&entityId=1525"
+        r = requests.get(url)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        
+        lessons = soup.find_all(class_="timetable-entry")
+        for lesson in lessons:
+            subject_tag = lesson.find(class_="subject")
+            subject = subject_tag.get_text(strip=True) if subject_tag else "Lesson"
+            room_tag = lesson.find(class_="room")
+            room = room_tag.get_text(strip=True) if room_tag else ""
+            time_tag = lesson.find(class_="time")
+            if time_tag:
+                times = time_tag.get_text(strip=True).split("–")
+                if len(times) == 2:
+                    start = datetime.fromisoformat(f"{date_str}T{times[0].strip()}:00")
+                    end = datetime.fromisoformat(f"{date_str}T{times[1].strip()}:00")
+                    e = Event()
+                    e.name = subject
+                    e.location = room
+                    e.begin = start
+                    e.end = end
+                    c.events.add(e)
 
     return str(c)
+
 
 @app.route("/calendar.ics")
 def calendar():

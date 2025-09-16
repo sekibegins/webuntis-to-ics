@@ -10,9 +10,8 @@ app = Flask(__name__)
 
 WEBUNTIS_BASE_URL = "https://thalia.webuntis.com/WebUntis?school=HFGS#/basic/timetablePublic/class?date={date}&entityId=1525"
 
-# Adjust these to match your school's timetable grid
-GRID_START_HOUR = 7      # timetable starts at 7:00
-PIXELS_PER_HOUR = 50     # estimate of pixels per hour on the WebUntis grid
+GRID_START_HOUR = 7
+PIXELS_PER_HOUR = 50
 
 def parse_time_from_style(style_str):
     """Extract top and height from style attribute."""
@@ -31,6 +30,8 @@ def time_to_datetime(date_obj, decimal_hour):
     m = int((decimal_hour - h) * 60)
     return datetime(date_obj.year, date_obj.month, date_obj.day, h, m)
 
+import tempfile 
+
 def fetch_timetable():
     c = Calendar()
 
@@ -38,8 +39,8 @@ def fetch_timetable():
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    
-    # Loop for next 30 days
+    chrome_options.add_argument(f"--user-data-dir={tempfile.mkdtemp()}")
+
     for day_offset in range(0, 30):
         day = datetime.today() + timedelta(days=day_offset)
         date_str = day.date().isoformat()
@@ -60,7 +61,6 @@ def fetch_timetable():
                 lesson = card.find_element(By.CSS_SELECTOR, "div.lesson-card-inner-card")
 
                 subject = lesson.find_element(By.CSS_SELECTOR, "span.lesson-card-subject").text
-                # Room: last span with data-testid='regular-resource'
                 room_elements = lesson.find_elements(By.CSS_SELECTOR, "span[data-testid='regular-resource']")
                 room = room_elements[-1].text if room_elements else ""
 
@@ -77,6 +77,7 @@ def fetch_timetable():
         driver.quit()
 
     return str(c)
+
 
 @app.route("/calendar.ics")
 def calendar():

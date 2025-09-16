@@ -41,12 +41,13 @@ def fetch_timetable():
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument(f"--user-data-dir={tempfile.mkdtemp()}")
 
+    driver = webdriver.Chrome(options=chrome_options)
+
     for day_offset in range(0, 30):
         day = datetime.today() + timedelta(days=day_offset)
         date_str = day.date().isoformat()
         url = WEBUNTIS_BASE_URL.format(date=date_str)
 
-        driver = webdriver.Chrome(options=chrome_options)
         driver.get(url)
         driver.implicitly_wait(5)
 
@@ -71,12 +72,14 @@ def fetch_timetable():
                 e.end = time_to_datetime(day, end_hour)
                 c.events.add(e)
 
-            except Exception as ex:
+            except Exception:
                 continue
 
-        driver.quit()
+    
+    driver.quit()
 
     return str(c)
+
 
 
 @app.route("/calendar.ics")

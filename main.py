@@ -22,7 +22,13 @@ def fetch_timetable():
         "formatId": 2,
     }
 
-    r = requests.get(BASE_URL, params=params)
+    headers = {
+        "Accept": "application/json",
+        "School": SCHOOL,   # <- add school name here
+    }
+
+    r = requests.get(BASE_URL, params=params, headers=headers)
+    r.raise_for_status()  # throws error if status != 200
     data = r.json()
 
     c = Calendar()
